@@ -6,10 +6,14 @@ from airflow.utils.dates import days_ago
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
+import urllib.request   
+from urllib.request import Request, urlopen
+
 from google.cloud import storage
 from airflow.providers.google.cloud.operators.bigquery import BigQueryCreateExternalTableOperator
 import pyarrow.csv as pv
 import pyarrow.parquet as pq
+from datetime import datetime
 
 # PROJECT_ID = os.environ.get("GCP_PROJECT_ID")
 # BUCKET = os.environ.get("GCP_GCS_BUCKET")
@@ -48,15 +52,21 @@ def upload_to_gcs(bucket, object_name, local_file):
     # End of Workaround
 
     client = storage.Client()
-    bucket = client.bucket(bucket)
+    bucket = storage_client.get_bucket('wfwijaya-fellowship')
 
-    blob = bucket.blob(object_name)
-    blob.upload_from_filename(local_file)
+    blob = bucket.blob(f"raw/{parquet_file}")
+    blob.upload_from_filename(f"{path_to_local_home}/{parquet_file}")
+
+    # client = storage.Client()
+    # bucket = client.bucket(bucket)
+
+    # blob = bucket.blob(object_name)
+    # blob.upload_from_filename(local_file)
 
 
 default_args = {
     "owner": "airflow",
-    "start_date": days_ago(1),
+    "start_date": datetime(2022, 9, 25),
     "depends_on_past": False,
     "retries": 1,
 }
@@ -64,7 +74,7 @@ default_args = {
 # NOTE: DAG declaration - using a Context Manager (an implicit way)
 with DAG(
     dag_id="data_ingestion_gcs_dag",
-    schedule_interval="@daily",
+    schedule_interval="@once",
     default_args=default_args,
     catchup=False,
     max_active_runs=1,
@@ -88,7 +98,7 @@ with DAG(
         task_id="local_to_gcs_task",
         python_callable=upload_to_gcs,
         op_kwargs={
-            "bucket": BUCKET,
+            "bucket": "wfwijaya-fellowship",
             "object_name": f"raw/{parquet_file}",
             "local_file": f"{path_to_local_home}/{parquet_file}",
         },
@@ -104,7 +114,7 @@ with DAG(
             },
             "externalDataConfiguration": {
                 "sourceFormat": "PARQUET",
-                "sourceUris": [f"gs://{BUCKET}/raw/{parquet_file}"],
+                "sourceUris": [f"gs://wfwijaya-fellowship/raw/{parquet_file}"],
             },
         },
     )
